@@ -1,0 +1,42 @@
+# 這是新帳本建立時使用的固定初始模板。
+# 新帳本建立後，這些分類會複製到 PostgreSQL 的 categories 表。
+# 後續用戶新增的第三層分類、付款方式與停用設定，都存在資料庫中，不會直接寫回 YAML。
+categories:
+  - key: income
+    name: 收入
+    direction: income
+    children:
+      - key: income.general
+        name: 一般收入
+      - key: income.investment
+        name: 投資收入
+      - key: income.other
+        name: 其他
+  - key: expense
+    name: 支出
+    direction: expense
+    children:
+      - key: expense.food
+        name: 食
+      - key: expense.clothing
+        name: 衣
+      - key: expense.housing
+        name: 住
+      - key: expense.transportation
+        name: 行
+      - key: expense.education
+        name: 育
+      - key: expense.entertainment
+        name: 樂
+      - key: expense.medical
+        name: 醫療
+      - key: expense.finance
+        name: 理財
+      - key: expense.other
+        name: 其他
+
+payment_kinds:
+  - key: cash
+    name: 現金
+  - key: credit_card
+    name: 信用卡

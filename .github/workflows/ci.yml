@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: linebot
+          POSTGRES_USER: linebot
+          POSTGRES_PASSWORD: linebot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U linebot -d linebot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://linebot:linebot@127.0.0.1:5432/linebot
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m mypy src scripts
+      - run: python -m pytest
+      - run: alembic upgrade head
+      - run: python scripts/postgres_smoke.py
+      - run: docker build --tag line-assistant:test .

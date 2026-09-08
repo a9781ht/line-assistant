@@ -1,0 +1,72 @@
+name: line-assistant
+
+services:
+  api:
+    build:
+      context: .
+    image: line-assistant:local
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set URL-encoded DATABASE_URL}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:?Set LINE_CHANNEL_SECRET}
+      LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:?Set LINE_CHANNEL_ACCESS_TOKEN}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TIMEZONE: Asia/Taipei
+      PUBLIC_BASE_URL: https://linebot.wufamily.dpdns.org
+    ports:
+      - "${APP_PORT:-18000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-linebot}
+      POSTGRES_USER: ${POSTGRES_USER:-linebot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      TZ: Asia/Taipei
+    volumes:
+      - ${POSTGRES_DATA_PATH:-./data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-linebot} -d ${POSTGRES_DB:-linebot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-linebot}
+      PGUSER: ${POSTGRES_USER:-linebot}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      TZ: Asia/Taipei
+    volumes:
+      - ${POSTGRES_BACKUP_PATH:-./backups}:/backups
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./scripts/cleanup.sh:/usr/local/bin/cleanup.sh:ro
+      - ./scripts/verify_backup.sh:/usr/local/bin/verify_backup.sh:ro
+    command: ["sh", "-c", "while true; do sh /usr/local/bin/backup.sh && sh /usr/local/bin/cleanup.sh; sleep 86400; done"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
