@@ -22,6 +22,20 @@ from line_assistant.ledger.setup import SetupService
 BotMessage = dict[str, Any]
 FlexAction = dict[str, Any]
 
+_CATEGORY_CARD_STYLES: dict[str, tuple[str, str]] = {
+    "食": ("🍜", "#F97316"),
+    "衣": ("👕", "#EC4899"),
+    "住": ("🏠", "#0EA5E9"),
+    "行": ("🚗", "#6366F1"),
+    "育": ("📚", "#8B5CF6"),
+    "樂": ("🎮", "#EAB308"),
+    "醫療": ("⚕️", "#EF4444"),
+    "理財": ("💰", "#10B981"),
+    "其他": ("✨", "#64748B"),
+    "一般收入": ("💼", "#16A34A"),
+    "投資收入": ("📈", "#059669"),
+}
+
 
 @cache
 def load_setup_template(filename: str) -> str:
@@ -117,6 +131,7 @@ def flex_card(
     actions: list[FlexAction] | None = None,
     color: str = "#2563EB",
     hero_image_url: str | None = None,
+    rich_lines: list[list[dict[str, Any]]] | None = None,
 ) -> BotMessage:
     body_contents: list[dict[str, Any]] = [
         {
@@ -128,17 +143,30 @@ def flex_card(
             "wrap": True,
         }
     ]
-    body_contents.extend(
-        {
-            "type": "text",
-            "text": line,
-            "size": "sm",
-            "color": "#374151",
-            "wrap": True,
-            "margin": "md",
-        }
-        for line in lines
-    )
+    if rich_lines is None:
+        body_contents.extend(
+            {
+                "type": "text",
+                "text": line,
+                "size": "sm",
+                "color": "#374151",
+                "wrap": True,
+                "margin": "md",
+            }
+            for line in lines
+        )
+    else:
+        body_contents.extend(
+            {
+                "type": "text",
+                "contents": line,
+                "size": "sm",
+                "color": "#374151",
+                "wrap": True,
+                "margin": "md",
+            }
+            for line in rich_lines
+        )
     bubble: dict[str, Any] = {
         "type": "bubble",
         "body": {"type": "box", "layout": "vertical", "contents": body_contents},
@@ -208,7 +236,8 @@ def setup_introduction_message(*, include_payments: bool) -> BotMessage:
         payment_lines = "\n".join(f"• {name}" for name in payment_names)
         payment_text = (
             "💳 另外，科米蛙也需要幫您在記帳中心設定專屬的付款工具。"
-            "請依照您日常習慣，填入適當的付款子項目\n"
+            "請依照您日常習慣，填入適當的付款子項目。\n\n"
+            "「付款方式」包含：\n"
             f"{payment_lines}\n\n"
         )
     return text_message(
@@ -220,7 +249,7 @@ def setup_introduction_message(*, include_payments: bool) -> BotMessage:
         "「收入」的記帳分類包含：\n"
         f"{income_text}\n\n"
         f"{payment_text}"
-        "🔎 科米蛙會提供可複製修改的範本，直接完整回傳即可。\n"
+        "🔎 科米蛙會提供可複製修改的範本，直接完整回傳即可。\n\n"
         "⚠️ 注意：上述的母分類是固定不可變動的，但您可以在其底下填入自己的子分類。"
     )
 
@@ -233,15 +262,23 @@ def setup_template_message(*, include_payments: bool) -> BotMessage:
 
 
 def setup_review_message(conversation: ConversationSession) -> BotMessage:
-    lines = SetupService.review_lines(conversation)
+    review_items = SetupService.review_items(conversation)
+    rich_lines = [
+        [
+            {"type": "span", "text": heading, "weight": "bold", "color": "#16A34A"},
+            {"type": "span", "text": items},
+        ]
+        for heading, items in review_items
+    ]
     return flex_card(
         alt_text="設定內容確認",
         title="設定內容確認",
-        lines=lines,
+        lines=[],
         actions=[
             postback_button("確認儲存", "setup.confirm", style="primary"),
             postback_button("重新設定", "setup.restart"),
         ],
+        rich_lines=rich_lines,
     )
 
 
@@ -368,61 +405,104 @@ def category_options_message(
     parent: Category | None,
     conversation: ConversationSession,
     page: int,
-    page_size: int = 6,
 ) -> BotMessage:
-    start = page * page_size
-    page_items = categories[start : start + page_size]
+    if parent is None:
+        return category_carousel_message(title, categories, conversation)
     actions = [
-        postback_button(
-            short_button_label(category.name),
-            "entry.category",
-            category_id=category.id,
-            flow_id=conversation.id,
-            revision=conversation.version,
-        )
-        for category in page_items
+        *[
+            postback_button(
+                short_button_label(category.name, maximum=12),
+                "entry.category",
+                category_id=category.id,
+                flow_id=conversation.id,
+                revision=conversation.version,
+            )
+            for category in categories
+        ],
+        postback_button("取消", "cancel"),
     ]
-    if parent is not None:
-        actions.insert(
-            0,
-            postback_button(
-                f"使用「{parent.name}」",
-                "entry.category.use",
-                category_id=parent.id,
-                style="primary",
-                flow_id=conversation.id,
-                revision=conversation.version,
-            ),
+    rows = [
+        {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "sm",
+            "contents": actions[index : index + 3],
+        }
+        for index in range(0, len(actions), 3)
+    ]
+    return {
+        "type": "flex",
+        "altText": f"選擇記帳子分類：{title}",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"選擇記帳子分類｜{title}",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#2563EB",
+                        "wrap": True,
+                    },
+                    *rows,
+                ],
+            },
+        },
+    }
+
+
+def category_carousel_message(
+    title: str, categories: list[Category], conversation: ConversationSession
+) -> BotMessage:
+    bubbles: list[dict[str, Any]] = []
+    for category in categories:
+        icon, color = _CATEGORY_CARD_STYLES.get(category.name, ("📒", "#2563EB"))
+        bubbles.append(
+            {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "backgroundColor": color,
+                    "contents": [
+                        {"type": "text", "text": icon, "size": "5xl", "align": "center"},
+                        {
+                            "type": "text",
+                            "text": category.name,
+                            "weight": "bold",
+                            "size": "xxl",
+                            "color": "#FFFFFF",
+                            "align": "center",
+                            "margin": "md",
+                        },
+                    ],
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        postback_button(
+                            f"選擇{category.name}",
+                            "entry.category",
+                            category_id=category.id,
+                            style="primary",
+                            flow_id=conversation.id,
+                            revision=conversation.version,
+                        )
+                    ],
+                },
+            }
         )
-    if page > 0:
-        actions.append(
-            postback_button(
-                "上一頁",
-                "entry.category.page",
-                parent_id=parent.id if parent else "root",
-                page=page - 1,
-                flow_id=conversation.id,
-                revision=conversation.version,
-            )
-        )
-    if start + page_size < len(categories):
-        actions.append(
-            postback_button(
-                "下一頁",
-                "entry.category.page",
-                parent_id=parent.id if parent else "root",
-                page=page + 1,
-                flow_id=conversation.id,
-                revision=conversation.version,
-            )
-        )
-    actions.append(postback_button("取消", "cancel"))
-    return flex_card(
-        alt_text=f"選擇記帳分類：{title}",
-        title=f"選擇記帳分類｜{title}",
-        lines=[f"目前共有 {len(categories)} 個選項。"],
-        actions=actions,
-    )
+    return {
+        "type": "flex",
+        "altText": f"選擇記帳分類：{title}",
+        "contents": {"type": "carousel", "contents": bubbles},
+    }
 
 
 def payment_kind_message(conversation: ConversationSession) -> BotMessage:

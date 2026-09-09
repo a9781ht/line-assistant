@@ -159,15 +159,21 @@ class SetupService:
         )
 
     @staticmethod
-    def review_lines(conversation: ConversationSession) -> list[str]:
+    def review_items(conversation: ConversationSession) -> list[tuple[str, str]]:
         answers: dict[str, list[str]] = conversation.payload.get("answers", {})
         return [
-            f"{label}{'記帳子分類' if kind == 'category' else '付款工具'}："
-            f"{', '.join(answers.get(key, [])) or '未設定'}"
+            (
+                f"{label}{'記帳子分類' if kind == 'category' else '付款工具'}：",
+                ", ".join(answers.get(key, [])) or "未設定",
+            )
             for key, label, kind in _setup_steps(
                 include_payments=bool(conversation.payload["include_payments"])
             )
         ]
+
+    @staticmethod
+    def review_lines(conversation: ConversationSession) -> list[str]:
+        return [f"{heading}{items}" for heading, items in SetupService.review_items(conversation)]
 
     async def confirm(self, conversation: ConversationSession) -> None:
         if conversation.flow != "setup" or conversation.state != "setup_review":
