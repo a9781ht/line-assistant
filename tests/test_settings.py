@@ -39,6 +39,15 @@ async def test_completed_user_can_manage_category_and_payment_method(
         menu = await dispatcher._handle_postback(context, "act=setup.start", {})
         FlexMessage.from_dict(menu[0])
 
+        ledger_menu = await dispatcher._handle_postback(
+            context, "act=service.open&service=ledger", {}
+        )
+        assert ledger_menu[0]["altText"] == "私人帳本功能選單"
+        placeholder = await dispatcher._handle_postback(
+            context, "act=service.open&service=placeholder-2", {}
+        )
+        assert placeholder[0]["text"] == "此服務中心正在準備中，敬請期待。"
+
         await dispatcher._handle_postback(
             context,
             urlencode(

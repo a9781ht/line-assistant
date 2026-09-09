@@ -72,6 +72,16 @@ from line_assistant.line.messages import (
 
 
 class EventDispatcher:
+    _PLACEHOLDER_SERVICES = frozenset(
+        {
+            "placeholder-2",
+            "placeholder-3",
+            "placeholder-4",
+            "placeholder-5",
+            "placeholder-6",
+        }
+    )
+
     # 列出所有「正在進行中的記帳草稿」專用按鈕事件
     # 它們會先比對目前對話的 flow_id 與 revision，確認按鈕來自最新草稿，才允許操作
     # 這能避免用戶點到舊的 LINE 訊息，意外修改或送出另一筆新草稿
@@ -343,11 +353,15 @@ class EventDispatcher:
                     "AI 消費分析功能正在準備中，未來將由 LLM 分析您的記帳資料與消費習慣。"
                 )
             ]
+        if action == "service.open":
+            service = value("service")
+            if service == "ledger":
+                return await self._open_ledger_service(context)
+            if service in self._PLACEHOLDER_SERVICES:
+                return [text_message("此服務中心正在準備中，敬請期待。")]
+            raise DomainError("找不到服務入口")
         if action == "service.ledger":
-            if context.scope.setup_completed:
-                return [self._menu(context)]
-            setup_conversation = await SetupService(context, self.conversations).start()
-            return self._setup_messages(setup_conversation)
+            return await self._open_ledger_service(context)
         if action == "cancel":
             await self.conversations.clear(context.scope.id, context.user.id)
             return [text_message("已取消目前流程。"), self._menu(context)]
@@ -758,6 +772,12 @@ class EventDispatcher:
 
     def _menu(self, context: ScopeContext) -> BotMessage:
         return main_menu_message(is_group=context.scope.scope_type is not ScopeType.PERSONAL)
+
+    async def _open_ledger_service(self, context: ScopeContext) -> list[BotMessage]:
+        if context.scope.setup_completed:
+            return [self._menu(context)]
+        setup_conversation = await SetupService(context, self.conversations).start()
+        return self._setup_messages(setup_conversation)
 
     @staticmethod
     def _setup_messages(conversation: ConversationSession) -> list[BotMessage]:
