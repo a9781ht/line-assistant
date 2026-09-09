@@ -200,8 +200,8 @@ def main_menu_message(*, is_group: bool) -> BotMessage:
             postback_button("記收入", "entry.start", direction="income", style="primary"),
             postback_button("最近紀錄", "entry.recent"),
             postback_button("本月統計", "entry.summary"),
-            postback_button("記帳分類與付款工具設定", "setup.start"),
-            postback_button("使用說明", "help"),
+            postback_button("設定", "setup.start"),
+            postback_button("AI 分析", "ai.analysis"),
         ],
     )
 
@@ -283,21 +283,16 @@ def setup_review_message(conversation: ConversationSession) -> BotMessage:
 
 
 def settings_menu_message(*, is_group: bool) -> BotMessage:
-    actions = [
-        postback_button("新增自訂記帳分類", "settings.add", style="primary"),
-        postback_button("管理既有記帳分類", "settings.categories"),
-    ]
-    if not is_group:
-        actions.append(postback_button("管理付款工具", "settings.payments"))
-    actions.append(postback_button("回到選單", "menu"))
     return flex_card(
-        alt_text="記帳設定中心",
-        title="記帳設定中心",
+        alt_text="記帳設定",
+        title="記帳設定",
         lines=[
-            "可用完整範本一次新增記帳子分類與付款工具。",
-            "已使用的項目停用後仍會保留在歷史交易中。",
+            "會重新跑一次初始化設定，對於已使用的項目若停用後仍會保留在歷史交易中。",
         ],
-        actions=actions,
+        actions=[
+            postback_button("重新初始化設定", "settings.add", style="primary"),
+            postback_button("回到選單", "menu"),
+        ],
     )
 
 
@@ -818,6 +813,34 @@ def summary_message(
         f"{name}：{'+' if amount >= 0 else '-'}NT$ {abs(amount):,}"
         for name, amount in sorted(summary.by_category.items())
     ]
+    totals = [
+        ("收入", summary.income, "#047857", "#ECFDF5"),
+        ("支出", summary.expense, "#B91C1C", "#FEF2F2"),
+        ("結餘", summary.balance, "#1D4ED8" if summary.balance >= 0 else "#B91C1C", "#EFF6FF"),
+    ]
+    total_contents = [
+        {
+            "type": "box",
+            "layout": "horizontal",
+            "alignItems": "center",
+            "justifyContent": "space-between",
+            "backgroundColor": background_color,
+            "paddingAll": "md",
+            "margin": "sm",
+            "contents": [
+                {"type": "text", "text": label, "weight": "bold", "size": "lg", "color": color},
+                {
+                    "type": "text",
+                    "text": f"NT$ {amount:,}",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": color,
+                    "align": "end",
+                },
+            ],
+        }
+        for label, amount, color, background_color in totals
+    ]
     actions = [
         postback_button(
             "上個月", "entry.summary", year=previous[0], month=previous[1]
@@ -830,18 +853,52 @@ def summary_message(
             )
         )
     actions.append(postback_button("回到選單", "menu", style="primary"))
-    return flex_card(
-        alt_text=f"{year} 年 {month} 月統計",
-        title=f"{year} 年 {month} 月",
-        lines=[
-            f"收入：NT$ {summary.income:,}",
-            f"支出：NT$ {summary.expense:,}",
-            f"結餘：NT$ {summary.balance:,}",
-            *category_lines,
-        ],
-        actions=actions,
-        color="#059669" if summary.balance >= 0 else "#DC2626",
-    )
+    return {
+        "type": "flex",
+        "altText": f"{year} 年 {month} 月統計",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"📊 {year} 年 {month} 月統計",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#2563EB",
+                    },
+                    *total_contents,
+                    {
+                        "type": "text",
+                        "text": "分類明細",
+                        "weight": "bold",
+                        "size": "sm",
+                        "color": "#4B5563",
+                        "margin": "lg",
+                    },
+                    *[
+                        {
+                            "type": "text",
+                            "text": line,
+                            "size": "sm",
+                            "color": "#374151",
+                            "wrap": True,
+                            "margin": "sm",
+                        }
+                        for line in category_lines
+                    ],
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": actions,
+            },
+        },
+    }
 
 
 def help_message() -> BotMessage:

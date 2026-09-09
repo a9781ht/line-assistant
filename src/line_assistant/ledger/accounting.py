@@ -97,7 +97,11 @@ class AccountingService:
                 "category_changed": True,
             }
         )
-        next_state = "review" if "editing_entry_id" in payload else "selecting_payment_kind"
+        next_state = (
+            "review"
+            if "editing_entry_id" in payload or payload.get("return_to_review")
+            else "selecting_payment_kind"
+        )
         return await self.conversations.update(
             conversation,
             state=next_state,
@@ -152,7 +156,11 @@ class AccountingService:
             payload["payment_method_id"] = str(method.id)
             payload["payment_name"] = method.name
         payload["payment_changed"] = True
-        next_state = "review" if "editing_entry_id" in payload else "awaiting_amount"
+        next_state = (
+            "review"
+            if "editing_entry_id" in payload or payload.get("return_to_review")
+            else "awaiting_amount"
+        )
         return await self.conversations.update(
             conversation,
             state=next_state,
@@ -232,9 +240,13 @@ class AccountingService:
             "date": "review",
             "note": "awaiting_note",
         }[target]
+        payload = dict(conversation.payload)
+        if target in {"category", "payment"}:
+            payload["return_to_review"] = True
         return await self.conversations.update(
             conversation,
             state=state,
+            payload=payload,
             ttl_minutes=self.draft_ttl_minutes,
         )
 

@@ -337,6 +337,12 @@ class EventDispatcher:
             return [self._menu(context)]
         if action == "help":
             return [help_message()]
+        if action == "ai.analysis":
+            return [
+                text_message(
+                    "AI 消費分析功能正在準備中，未來將由 LLM 分析您的記帳資料與消費習慣。"
+                )
+            ]
         if action == "service.ledger":
             if context.scope.setup_completed:
                 return [self._menu(context)]

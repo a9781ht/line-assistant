@@ -37,6 +37,17 @@ async def test_create_entry_preserves_snapshots_and_summary(
         await accounting.select_payment_kind(context, PaymentKind.CREDIT_CARD)
         await accounting.select_payment_method(context, card.id)
         await accounting.set_amount(context, 120)
+        await accounting.begin_modify(context, "category")
+        category_edit = await accounting.select_category(context, breakfast.id)
+        assert category_edit.state == "review"
+        assert category_edit.payload["amount"] == 120
+        assert category_edit.payload["payment_name"] == "國泰Cube卡"
+
+        await accounting.begin_modify(context, "payment")
+        await accounting.select_payment_kind(context, PaymentKind.CREDIT_CARD)
+        payment_edit = await accounting.select_payment_method(context, card.id)
+        assert payment_edit.state == "review"
+        assert payment_edit.payload["amount"] == 120
         await accounting.begin_note(context)
         await accounting.set_note(context, "早餐")
         entry = await accounting.confirm(context, webhook_event_id="evt-create")
