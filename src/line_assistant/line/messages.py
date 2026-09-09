@@ -29,7 +29,7 @@ _CATEGORY_CARD_STYLES: dict[str, tuple[str, str]] = {
     "行": ("🚗", "#6366F1"),
     "育": ("📚", "#8B5CF6"),
     "樂": ("🎮", "#EAB308"),
-    "醫療": ("⚕️", "#EF4444"),
+    "醫療": ("💊", "#0F766E"),
     "理財": ("💰", "#10B981"),
     "其他": ("✨", "#64748B"),
     "一般收入": ("💼", "#16A34A"),
@@ -411,24 +411,24 @@ def category_options_message(
     actions = [
         *[
             postback_button(
-                short_button_label(category.name, maximum=12),
+                short_button_label(category.name, maximum=20),
                 "entry.category",
                 category_id=category.id,
+                style="primary",
                 flow_id=conversation.id,
                 revision=conversation.version,
             )
             for category in categories
         ],
-        postback_button("取消", "cancel"),
     ]
-    rows = [
+    columns = [
         {
             "type": "box",
-            "layout": "horizontal",
-            "spacing": "sm",
-            "contents": actions[index : index + 3],
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": actions[index::2],
         }
-        for index in range(0, len(actions), 3)
+        for index in range(2)
     ]
     return {
         "type": "flex",
@@ -447,8 +447,19 @@ def category_options_message(
                         "color": "#2563EB",
                         "wrap": True,
                     },
-                    *rows,
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "spacing": "sm",
+                        "contents": columns,
+                        "margin": "md",
+                    },
                 ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [postback_button("取消", "cancel")],
             },
         },
     }
@@ -548,6 +559,7 @@ def payment_method_message(
             short_button_label(method.name),
             "entry.payment.method",
             method_id=method.id,
+            style="primary",
             flow_id=conversation.id,
             revision=conversation.version,
         )
@@ -560,6 +572,7 @@ def payment_method_message(
                 "entry.payment.page",
                 kind=kind.value,
                 page=page - 1,
+                style="primary",
                 flow_id=conversation.id,
                 revision=conversation.version,
             )
@@ -571,19 +584,11 @@ def payment_method_message(
                 "entry.payment.page",
                 kind=kind.value,
                 page=page + 1,
+                style="primary",
                 flow_id=conversation.id,
                 revision=conversation.version,
             )
         )
-    actions.append(
-        postback_button(
-            f"直接使用「{label}」",
-            "entry.payment.method",
-            method_id="none",
-            flow_id=conversation.id,
-            revision=conversation.version,
-        )
-    )
     actions.append(postback_button("取消", "cancel"))
     return flex_card(
         alt_text=f"選擇{label}付款工具",
