@@ -104,7 +104,7 @@ class IdentityService:
         *,
         is_friend: bool | None = None,
     ) -> ScopeContext:
-        """這是 LINE 事件處理最常用的入口，它會同時確保用戶、範圍與帳本都已存在，並回傳 ScopeContext。"""
+        """確保用戶、範圍與帳本都已存在，並回傳 LINE 事件所需的 context。"""
         user = await self.ensure_user(line_user_id, is_friend=is_friend)
         scope, ledger = await self.ensure_scope(
             scope_type,

@@ -15,8 +15,8 @@ def _as_utc(value: datetime) -> datetime:
 
 
 # 管理多步驟對話流程狀態。
-# LINE 記帳不是一個 HTTP request 就完成，每一步都是不同 webhook 事件，因此需要將目前進度存在資料庫。
-# 其中的 version 很重要，因為 LINE 可能保留舊訊息，用戶點舊按鈕時，按鈕中帶的舊版本與資料庫目前版本不同，系統就拒絕那次操作。
+# LINE 記帳不是一個 HTTP request 就完成；每一步都是不同 webhook 事件，
+# 因此需要將目前進度存在資料庫。version 可阻止使用者以舊按鈕操作新草稿。
 class ConversationService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session

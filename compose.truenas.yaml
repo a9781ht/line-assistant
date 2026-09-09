@@ -1,0 +1,62 @@
+name: line-assistant
+
+# TrueNAS Custom App 專用 Compose；路徑對應 wu-pool 的 lineBot datasets。
+services:
+  api:
+    build:
+      context: /mnt/wu-pool/apps/lineBot/source
+    image: line-assistant:local
+    restart: unless-stopped
+    env_file:
+      - /mnt/wu-pool/apps/lineBot/source/.env
+    ports:
+      - "18000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - /mnt/wu-pool/apps/lineBot/source/.env
+    environment:
+      TZ: Asia/Taipei
+    volumes:
+      - /mnt/wu-pool/apps/lineBot/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - /mnt/wu-pool/apps/lineBot/source/.env
+    volumes:
+      - /mnt/wu-pool/apps/lineBot/backup:/backups
+      - /mnt/wu-pool/apps/lineBot/source/scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - /mnt/wu-pool/apps/lineBot/source/scripts/cleanup.sh:/usr/local/bin/cleanup.sh:ro
+      - /mnt/wu-pool/apps/lineBot/source/scripts/verify_backup.sh:/usr/local/bin/verify_backup.sh:ro
+    command: ["sh", "-c", "export PGHOST=postgres PGDATABASE=\"$$POSTGRES_DB\" PGUSER=\"$$POSTGRES_USER\" PGPASSWORD=\"$$POSTGRES_PASSWORD\"; while true; do sh /usr/local/bin/backup.sh && sh /usr/local/bin/cleanup.sh; sleep 86400; done"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

@@ -1,10 +1,11 @@
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from line_assistant.db.models import Category, PaymentKind, PaymentMethod, ScopeType
 from line_assistant.ledger.context import IdentityService
 from line_assistant.ledger.conversation import ConversationService
-from line_assistant.ledger.setup import SetupService
+from line_assistant.ledger.setup import SetupService, parse_setup_template
 
 PERSONAL_TEMPLATE: dict[str, list[str]] = {
     "income.general": [
@@ -101,6 +102,35 @@ PERSONAL_TEMPLATE: dict[str, list[str]] = {
 }
 
 
+def render_personal_template() -> str:
+    lines = ["• 收入"]
+    for key, name in (
+        ("income.general", "一般收入"),
+        ("income.investment", "投資收入"),
+        ("income.other", "其他"),
+    ):
+        lines.append(f"  ◦ {name}")
+        lines.extend(f"    ▪ {item}" for item in PERSONAL_TEMPLATE.get(key, []))
+    lines.append("• 支出")
+    for key, name in (
+        ("expense.food", "食"),
+        ("expense.clothing", "衣"),
+        ("expense.housing", "住"),
+        ("expense.transportation", "行"),
+        ("expense.education", "育"),
+        ("expense.entertainment", "樂"),
+        ("expense.medical", "醫療"),
+        ("expense.finance", "理財"),
+        ("expense.other", "其他"),
+    ):
+        lines.append(f"  ◦ {name}")
+        lines.extend(f"    ▪ {item}" for item in PERSONAL_TEMPLATE.get(key, []))
+    for key, name in ((PaymentKind.CASH.value, "現金"), (PaymentKind.CREDIT_CARD.value, "信用卡")):
+        lines.append(f"• {name}")
+        lines.extend(f"  ◦ {item}" for item in PERSONAL_TEMPLATE[key])
+    return "\n".join(lines)
+
+
 async def test_full_personal_setup_template(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -115,13 +145,9 @@ async def test_full_personal_setup_template(
         setup = SetupService(context, conversations)
         conversation = await setup.start()
 
-        while conversation.state == "awaiting_setup_items":
-            step = setup.current_step(conversation)
-            conversation, _ = await setup.answer(
-                conversation,
-                PERSONAL_TEMPLATE.get(step.key, []),
-            )
+        conversation = await setup.answer_template(conversation, render_personal_template())
 
+        assert conversation.state == "setup_review"
         await setup.confirm(conversation)
         await session.commit()
 
@@ -152,11 +178,17 @@ async def test_setup_resumes_unless_restart_is_explicit(
         )
         setup = SetupService(context, ConversationService(session))
         first = await setup.start()
-        progressed, _ = await setup.answer(first, ["薪資"])
+        progressed = await setup.answer_template(first, render_personal_template())
         resumed = await setup.start()
         assert resumed.id == progressed.id
-        assert resumed.payload["step_index"] == 1
+        assert resumed.state == "setup_review"
 
         restarted = await setup.start(restart=True)
         assert restarted.id == progressed.id
-        assert restarted.payload["step_index"] == 0
+        assert restarted.state == "awaiting_setup_template"
+
+
+def test_setup_template_rejects_changed_fixed_categories() -> None:
+    invalid = render_personal_template().replace("  ◦ 食", "  ◦ 餐飲", 1)
+    with pytest.raises(Exception, match="格式有問題，科米蛙不理解"):
+        parse_setup_template(invalid, include_payments=True)

@@ -7,7 +7,9 @@ _SEPARATOR_PATTERN = re.compile(r"[,，、;；\n\r]+")
 _AMOUNT_PATTERN = re.compile(r"^[0-9]+$")
 
 
-def parse_batch_names(text: str, *, max_items: int = 30, max_length: int = 100) -> list[str]:
+def parse_batch_names(
+    text: str, *, max_items: int | None = None, max_length: int = 100
+) -> list[str]:
     """解析記帳子分類或付款工具的批次設定名稱。"""
 
     normalized = unicodedata.normalize("NFKC", text).strip()
@@ -27,7 +29,7 @@ def parse_batch_names(text: str, *, max_items: int = 30, max_length: int = 100) 
             seen.add(key)
             result.append(name)
 
-    if len(result) > max_items:
+    if max_items is not None and len(result) > max_items:
         raise DomainError(f"一次最多可輸入 {max_items} 個項目")
     return result
 

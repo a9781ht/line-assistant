@@ -30,6 +30,7 @@ from line_assistant.db.models import (
     AssistantScope,
     AuditLog,
     Category,
+    ConversationSession,
     Direction,
     PaymentKind,
     ScopeMembership,
@@ -61,10 +62,12 @@ from line_assistant.line.messages import (
     settings_menu_message,
     settings_payment_list_message,
     settings_payment_message,
-    setup_question_message,
+    setup_introduction_message,
     setup_review_message,
+    setup_template_message,
     summary_message,
     text_message,
+    welcome_message,
 )
 
 
@@ -121,23 +124,7 @@ class EventDispatcher:
         #  4. 若已設定完成，回傳主選單。
         if isinstance(event, FollowEvent):
             context = await self._context(event, is_friend=True)
-            welcome = flex_card(
-                alt_text="歡迎使用 LINE 助理",
-                title="歡迎使用 LINE 助理",
-                lines=["第一個功能是記帳中心。"],
-                actions=[],
-            )
-            if context.scope.setup_completed:
-                return [welcome, main_menu_message(is_group=False)]
-            setup_conversation = await SetupService(context, self.conversations).start()
-            return [
-                welcome,
-                (
-                    setup_review_message(setup_conversation)
-                    if setup_conversation.state == "setup_review"
-                    else setup_question_message(setup_conversation)
-                ),
-            ]
+            return [welcome_message()]
         
         # 用戶解除 Bot 好友
         if isinstance(event, UnfollowEvent):
@@ -235,12 +222,11 @@ class EventDispatcher:
                 return []
             return [self._menu(context)]
 
-        if conversation.flow == "setup" and conversation.state == "awaiting_setup_items":
-            names = parse_batch_names(text)
-            updated, finished = await SetupService(context, self.conversations).answer(
-                conversation, names
+        if conversation.flow == "setup" and conversation.state == "awaiting_setup_template":
+            updated = await SetupService(context, self.conversations).answer_template(
+                conversation, text
             )
-            return [setup_review_message(updated) if finished else setup_question_message(updated)]
+            return [text_message("格式正確，科米蛙理解。"), setup_review_message(updated)]
 
         if conversation.flow == "entry" and conversation.state == "awaiting_amount":
             amount = parse_twd_amount(text, maximum=self.max_amount)
@@ -351,6 +337,11 @@ class EventDispatcher:
             return [self._menu(context)]
         if action == "help":
             return [help_message()]
+        if action == "service.ledger":
+            if context.scope.setup_completed:
+                return [self._menu(context)]
+            setup_conversation = await SetupService(context, self.conversations).start()
+            return self._setup_messages(setup_conversation)
         if action == "cancel":
             await self.conversations.clear(context.scope.id, context.user.id)
             return [text_message("已取消目前流程。"), self._menu(context)]
@@ -362,17 +353,13 @@ class EventDispatcher:
                     )
                 ]
             setup_conversation = await SetupService(context, self.conversations).start()
-            return [
-                setup_review_message(setup_conversation)
-                if setup_conversation.state == "setup_review"
-                else setup_question_message(setup_conversation)
-            ]
+            return self._setup_messages(setup_conversation)
         if action == "settings.add":
             setup_conversation = await SetupService(context, self.conversations).start(restart=True)
-            return [setup_question_message(setup_conversation)]
+            return self._setup_messages(setup_conversation)
         if action == "setup.restart":
             setup_conversation = await SetupService(context, self.conversations).start(restart=True)
-            return [setup_question_message(setup_conversation)]
+            return self._setup_messages(setup_conversation)
         if action == "settings.categories":
             return [await self._settings_categories(context, int(value("page", "0")))]
         if action == "settings.category":
@@ -741,6 +728,16 @@ class EventDispatcher:
 
     def _menu(self, context: ScopeContext) -> BotMessage:
         return main_menu_message(is_group=context.scope.scope_type is not ScopeType.PERSONAL)
+
+    @staticmethod
+    def _setup_messages(conversation: ConversationSession) -> list[BotMessage]:
+        if conversation.state == "setup_review":
+            return [setup_review_message(conversation)]
+        include_payments = bool(conversation.payload["include_payments"])
+        return [
+            setup_introduction_message(include_payments=include_payments),
+            setup_template_message(include_payments=include_payments),
+        ]
 
     async def _settings_categories(self, context: ScopeContext, page: int) -> BotMessage:
         categories, has_next = await self.categories.list_custom(

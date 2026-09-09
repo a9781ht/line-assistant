@@ -149,34 +149,165 @@ def main_menu_message(*, is_group: bool) -> BotMessage:
     )
 
 
-def setup_question_message(conversation: ConversationSession) -> BotMessage:
-    step = SetupService.current_step(conversation)
-    item_label = (
-        f"「{step.label}」的下一層記帳子分類"
-        if step.kind == "category"
-        else f"「{step.label}」的付款工具"
+def welcome_message() -> BotMessage:
+    return flex_card(
+        alt_text="歡迎使用 LINE 助理",
+        title="🐸 歡迎使用 LINE 助理",
+        lines=[
+            "我是您的小幫手－科米蛙。",
+            "可以幫您解決各種疑難雜症。",
+            "目前提供的服務：",
+            "1. 記帳中心",
+            "請選擇您有興趣的服務，讓科米蛙協助完成初始化設定。",
+        ],
+        actions=[postback_button("記帳中心", "service.ledger", style="primary")],
+        color="#16A34A",
+    )
+
+
+def setup_introduction_message(*, include_payments: bool) -> BotMessage:
+    payment_text = (
+        "另外，也請設定付款方式底下的付款工具：現金、信用卡。\n\n"
+        if include_payments
+        else ""
     )
     return text_message(
-        f"請設定{item_label}。\n"
-        "可用頓號、逗號或換行一次輸入多個名稱；沒有需要可按「跳過」。",
-        quick_actions=[
-            {"type": "message", "label": "跳過", "text": "跳過"},
-            {"type": "message", "label": "取消", "text": "取消"},
-        ],
+        "首先，科米蛙需要幫您在記帳中心設定專屬的記帳項目。\n\n"
+        "「支出」的記帳分類包含：\n"
+        "• 食　• 衣　• 住　• 行　• 育\n"
+        "• 樂　• 醫療　• 理財　• 其他\n\n"
+        "「收入」的記帳分類包含：\n"
+        "• 一般收入　• 投資收入　• 其他\n\n"
+        "請依照日常收支，填入適當的記帳子分類。\n"
+        f"{payment_text}"
+        "科米蛙會提供可複製修改的範本，直接完整回傳即可。\n"
+        "注意：記帳分類的第一、二層，以及付款方式皆為固定項目。"
+    )
+
+
+def setup_template_message(*, include_payments: bool) -> BotMessage:
+    payment_template = (
+        "\n\n• 現金\n"
+        "  ◦ 實體\n"
+        "  ◦ 轉帳\n"
+        "  ◦ 約當\n\n"
+        "• 信用卡\n"
+        "  ◦ 永豐DAWHO卡\n"
+        "  ◦ 台新Richart卡\n"
+        "  ◦ 國泰Cube卡\n"
+        "  ◦ 富邦J卡\n"
+        "  ◦ 玉山Unicard"
+        if include_payments
+        else ""
+    )
+    return text_message(
+        "請複製下方範本後，依需求增刪「▪」開頭的記帳子分類，\n"
+        "或增刪現金、信用卡下以「◦」開頭的付款工具，再一次完整回傳。\n"
+        "請保留收入／支出下的「•」與「◦」，以及付款方式的「•」固定項目。\n\n"
+        "• 收入\n"
+        "  ◦ 一般收入\n"
+        "    ▪ 薪資\n"
+        "    ▪ 上半年績效\n"
+        "    ▪ 下半年績效\n"
+        "    ▪ 年終獎金\n"
+        "    ▪ Q1 季獎金\n"
+        "    ▪ Q2 季獎金\n"
+        "    ▪ Q3 季獎金\n"
+        "    ▪ Q4 季獎金\n"
+        "    ▪ 勞動節\n"
+        "    ▪ 端午節\n"
+        "    ▪ 中秋節\n"
+        "    ▪ 生日\n"
+        "    ▪ 開工\n"
+        "    ▪ 尾牙\n"
+        "    ▪ 旅遊補助\n"
+        "    ▪ 差旅補助\n"
+        "    ▪ 中獎禮券\n"
+        "  ◦ 投資收入\n"
+        "    ▪ 銀行利息\n"
+        "    ▪ 股利所得\n"
+        "    ▪ 股票買賣\n"
+        "  ◦ 其他\n\n"
+        "• 支出\n"
+        "  ◦ 食\n"
+        "    ▪ 早餐\n"
+        "    ▪ 早午餐\n"
+        "    ▪ 午餐\n"
+        "    ▪ 下午茶\n"
+        "    ▪ 晚餐\n"
+        "    ▪ 宵夜\n"
+        "    ▪ 節日餐\n"
+        "    ▪ 點心零嘴\n"
+        "    ▪ 食材\n"
+        "  ◦ 衣\n"
+        "    ▪ 服裝\n"
+        "    ▪ 鞋子\n"
+        "    ▪ 配件\n"
+        "    ▪ 剪髮理容\n"
+        "  ◦ 住\n"
+        "    ▪ 房租\n"
+        "    ▪ 電費\n"
+        "    ▪ 水費\n"
+        "    ▪ 網路費\n"
+        "    ▪ 電話費\n"
+        "    ▪ 綜所稅\n"
+        "    ▪ 家電傢俱用品\n"
+        "    ▪ 生活必需用品\n"
+        "    ▪ 串流訂閱\n"
+        "    ▪ 雜支\n"
+        "  ◦ 行\n"
+        "    ▪ 油錢\n"
+        "    ▪ 捷運\n"
+        "    ▪ 公車\n"
+        "    ▪ 客運\n"
+        "    ▪ 台鐵\n"
+        "    ▪ 區間\n"
+        "    ▪ 高鐵\n"
+        "    ▪ 飛機\n"
+        "    ▪ 停車費\n"
+        "    ▪ 過路費\n"
+        "    ▪ 租車\n"
+        "    ▪ 計程車\n"
+        "    ▪ 維修保養\n"
+        "    ▪ 美容洗車\n"
+        "    ▪ 牌照稅\n"
+        "    ▪ 燃料費\n"
+        "    ▪ 汽機車保險\n"
+        "    ▪ 驗車費\n"
+        "    ▪ 材料費\n"
+        "    ▪ 罰單\n"
+        "  ◦ 育\n"
+        "    ▪ 書籍\n"
+        "    ▪ 課程\n"
+        "    ▪ AI 訂閱\n"
+        "    ▪ 考試\n"
+        "  ◦ 樂\n"
+        "    ▪ 旅行住宿\n"
+        "    ▪ 旅行遊玩\n"
+        "    ▪ 旅行購物\n"
+        "    ▪ 旅行吃飯\n"
+        "    ▪ 旅行保險\n"
+        "    ▪ 旅行雜支\n"
+        "    ▪ 運動健身\n"
+        "    ▪ 社交\n"
+        "    ▪ 生活奢侈用品\n"
+        "    ▪ 送禮物\n"
+        "    ▪ 婚喪喜慶\n"
+        "  ◦ 醫療\n"
+        "    ▪ 診所就醫\n"
+        "    ▪ 購買藥物\n"
+        "    ▪ 保費\n"
+        "  ◦ 理財\n"
+        "    ▪ 儲蓄\n"
+        "    ▪ ETF 股票\n"
+        "    ▪ 個股股票\n"
+        "  ◦ 其他"
+        f"{payment_template}"
     )
 
 
 def setup_review_message(conversation: ConversationSession) -> BotMessage:
-    answers: dict[str, list[str]] = conversation.payload.get("answers", {})
-    lines = [
-        (
-            f"{step['label']}的記帳子分類："
-            f"{', '.join(answers.get(step['key'], [])) or '未細分'}"
-            if step["kind"] == "category"
-            else f"{step['label']}付款工具：{', '.join(answers.get(step['key'], [])) or '未設定'}"
-        )
-        for step in conversation.payload["steps"]
-    ]
+    lines = SetupService.review_lines(conversation)
     return flex_card(
         alt_text="設定內容確認",
         title="設定內容確認",
@@ -200,7 +331,7 @@ def settings_menu_message(*, is_group: bool) -> BotMessage:
         alt_text="記帳設定中心",
         title="記帳設定中心",
         lines=[
-            "新增會重新走逐類問答，只需在要增加的記帳分類輸入內容，其餘可跳過。",
+            "可用完整範本一次新增記帳子分類與付款工具。",
             "已使用的項目停用後仍會保留在歷史交易中。",
         ],
         actions=actions,

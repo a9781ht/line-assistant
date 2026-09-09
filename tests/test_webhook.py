@@ -94,7 +94,7 @@ async def test_webhook_verifies_signature_and_is_idempotent(
     assert invalid.status_code == 400
     assert ready.status_code == 200
     assert len(fake_client.replies) == 1
-    assert len(fake_client.replies[0][1]) == 2
+    assert len(fake_client.replies[0][1]) == 1
 
     async with session_factory() as session:
         assert await session.scalar(select(func.count(WebhookEvent.id))) == 1

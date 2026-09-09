@@ -30,7 +30,9 @@ from line_assistant.line.messages import (
     settings_payment_list_message,
     settings_payment_message,
     setup_review_message,
+    setup_template_message,
     summary_message,
+    welcome_message,
 )
 
 
@@ -48,8 +50,8 @@ def test_setup_review_message_schema() -> None:
         flow="setup",
         state="setup_review",
         payload={
-            "steps": [{"key": "expense.food", "label": "食", "kind": "category"}],
             "answers": {"expense.food": ["早餐", "午餐"]},
+            "include_payments": False,
         },
         expires_at=datetime.now(UTC),
     )
@@ -92,7 +94,7 @@ def test_all_accounting_flex_builders_match_line_schema() -> None:
         payload={
             "direction": "expense",
             "category_path": ["支出", "食", "早餐"],
-                "payment_kind": "credit_card",
+            "payment_kind": "credit_card",
             "payment_name": "國泰Cube卡",
             "amount": 120,
             "transaction_date": "2026-09-07",
@@ -147,7 +149,9 @@ def test_all_accounting_flex_builders_match_line_schema() -> None:
         settings_category_message(category, "支出 › 食 › 早餐"),
         settings_payment_list_message([method], page=0, has_next=False),
         settings_payment_message(method),
+        welcome_message(),
     ]
     for message in messages:
         parsed = FlexMessage.from_dict(message)
         assert parsed is not None
+    TextMessage.from_dict(setup_template_message(include_payments=True))
