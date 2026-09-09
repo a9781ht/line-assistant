@@ -422,13 +422,17 @@ class AccountingService:
         *,
         page: int = 0,
         page_size: int = 10,
+        transaction_date: date | None = None,
     ) -> tuple[list[LedgerEntry], bool]:
+        conditions = [
+            LedgerEntry.ledger_id == context.ledger.id,
+            LedgerEntry.deleted_at.is_(None),
+        ]
+        if transaction_date is not None:
+            conditions.append(LedgerEntry.transaction_date == transaction_date)
         query = (
             select(LedgerEntry)
-            .where(
-                LedgerEntry.ledger_id == context.ledger.id,
-                LedgerEntry.deleted_at.is_(None),
-            )
+            .where(*conditions)
             .order_by(LedgerEntry.transaction_date.desc(), LedgerEntry.created_at.desc())
             .offset(max(page, 0) * page_size)
             .limit(page_size + 1)

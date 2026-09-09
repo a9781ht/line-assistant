@@ -95,22 +95,37 @@ def datetime_button(
     initial: date,
     conversation: ConversationSession | None = None,
 ) -> FlexAction:
-    params: dict[str, str | int | uuid.UUID] = {}
-    if conversation is not None:
-        params = {"flow_id": conversation.id, "revision": conversation.version}
     return {
         "type": "button",
         "style": "secondary",
         "height": "sm",
         "margin": "sm",
-        "action": {
-            "type": "datetimepicker",
-            "label": label,
-            "data": postback_data(action, **params),
-            "mode": "date",
-            "initial": initial.isoformat(),
-            "max": date.today().isoformat(),
-        },
+        "action": datetime_picker_action(
+            label,
+            action,
+            initial=initial,
+            conversation=conversation,
+        ),
+    }
+
+
+def datetime_picker_action(
+    label: str,
+    action: str,
+    *,
+    initial: date,
+    conversation: ConversationSession | None = None,
+) -> FlexAction:
+    params: dict[str, str | int | uuid.UUID] = {}
+    if conversation is not None:
+        params = {"flow_id": conversation.id, "revision": conversation.version}
+    return {
+        "type": "datetimepicker",
+        "label": label,
+        "data": postback_data(action, **params),
+        "mode": "date",
+        "initial": initial.isoformat(),
+        "max": date.today().isoformat(),
     }
 
 
@@ -714,21 +729,47 @@ def recent_entries_message(
     is_group: bool,
     page: int,
     has_next: bool,
+    selected_date: date | None = None,
 ) -> BotMessage:
+    title = f"{selected_date.isoformat()} 的交易紀錄" if selected_date else "最近紀錄"
+    date_picker_label = "選擇其他日期" if selected_date else "選擇日期"
+    quick_actions: list[FlexAction] = [
+        datetime_picker_action(
+            date_picker_label,
+            "entry.recent.date",
+            initial=selected_date or date.today(),
+        )
+    ]
+    if selected_date:
+        quick_actions.append(
+            {
+                "type": "postback",
+                "label": "返回最近紀錄",
+                "data": postback_data("entry.recent"),
+            }
+        )
     if not entries:
-        return flex_card(
-            alt_text="最近紀錄",
-            title="最近紀錄",
-            lines=["這一頁沒有已確認的交易。"],
+        message = flex_card(
+            alt_text=title,
+            title=title,
+            lines=[
+                f"{selected_date.isoformat()} 尚無已確認的交易。"
+                if selected_date
+                else "這一頁沒有已確認的交易。"
+            ],
             actions=[
                 *(
                     [postback_button("上一頁", "entry.recent", page=page - 1)]
-                    if page > 0
+                    if page > 0 and selected_date is None
                     else []
                 ),
                 postback_button("回到選單", "menu", style="primary"),
             ],
         )
+        message["quickReply"] = {
+            "items": [{"type": "action", "action": action} for action in quick_actions]
+        }
+        return message
 
     bubbles: list[dict[str, Any]] = []
     for entry in entries:
@@ -757,7 +798,7 @@ def recent_entries_message(
             color="#059669" if entry.direction is Direction.INCOME else "#DC2626",
         )["contents"]
         bubbles.append(bubble)
-    if page > 0 or has_next:
+    if selected_date is None and (page > 0 or has_next):
         navigation_actions: list[FlexAction] = []
         if page > 0:
             navigation_actions.append(
@@ -775,11 +816,15 @@ def recent_entries_message(
                 actions=navigation_actions,
             )["contents"]
         )
-    return {
+    message = {
         "type": "flex",
-        "altText": "最近交易紀錄",
+        "altText": title,
         "contents": {"type": "carousel", "contents": bubbles},
     }
+    message["quickReply"] = {
+        "items": [{"type": "action", "action": action} for action in quick_actions]
+    }
+    return message
 
 
 def delete_confirmation_message(entry_id: uuid.UUID, entry_version: int) -> BotMessage:

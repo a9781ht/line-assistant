@@ -163,7 +163,7 @@ class SetupService:
         answers: dict[str, list[str]] = conversation.payload.get("answers", {})
         return [
             (
-                f"{label}{'記帳子分類' if kind == 'category' else '付款工具'}：",
+                f"「{label}」{'記帳子分類' if kind == 'category' else '付款工具'}：",
                 ", ".join(answers.get(key, [])) or "未設定",
             )
             for key, label, kind in _setup_steps(

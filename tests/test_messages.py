@@ -58,7 +58,10 @@ def test_setup_review_message_schema() -> None:
         },
         expires_at=datetime.now(UTC),
     )
-    FlexMessage.from_dict(setup_review_message(conversation))
+    message = setup_review_message(conversation)
+    FlexMessage.from_dict(message)
+    first_heading = message["contents"]["body"]["contents"][1]["contents"][0]["text"]
+    assert first_heading == "「一般收入」記帳子分類："
 
 
 def test_datetime_button_uses_non_future_maximum() -> None:
@@ -139,6 +142,13 @@ def test_all_accounting_flex_builders_match_line_schema() -> None:
         modify_menu_message(conversation),
         entry_result_message(entry, updated=False),
         recent_entries_message([entry], is_group=True, page=0, has_next=True),
+        recent_entries_message(
+            [entry],
+            is_group=True,
+            page=0,
+            has_next=False,
+            selected_date=date(2026, 9, 7),
+        ),
         delete_confirmation_message(entry.id, entry.version),
         summary_message(
             MonthlySummary(income=1000, expense=120, balance=880, by_category={"食": -120}),

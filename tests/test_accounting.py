@@ -180,6 +180,22 @@ async def test_recent_entries_are_paginated(
         assert len(second_page) == 2
         assert second_has_next is False
 
+        selected_date = date(2020, 1, 1)
+        await accounting.start_entry(context, Direction.EXPENSE)
+        await accounting.select_category(context, other.id)
+        await accounting.select_payment_kind(context, PaymentKind.CASH)
+        await accounting.select_payment_method(context, None)
+        await accounting.set_amount(context, 99)
+        await accounting.set_date(context, selected_date)
+        await accounting.confirm(context)
+
+        selected_entries, selected_has_next = await accounting.recent_entries(
+            context,
+            transaction_date=selected_date,
+        )
+        assert [entry.amount for entry in selected_entries] == [99]
+        assert selected_has_next is False
+
 
 async def test_custom_category_with_children_must_be_disabled_bottom_up(
     session_factory: async_sessionmaker[AsyncSession],

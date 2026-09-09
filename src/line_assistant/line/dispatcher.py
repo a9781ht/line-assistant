@@ -603,6 +603,30 @@ class EventDispatcher:
                     has_next=has_next,
                 )
             ]
+        if action == "entry.recent.date":
+            date_value = postback_params.get("date")
+            if not date_value:
+                raise InvalidStateError("沒有收到日期")
+            try:
+                selected_date = date.fromisoformat(date_value)
+            except ValueError as error:
+                raise DomainError("查詢日期格式錯誤") from error
+            today = datetime.now(ZoneInfo(context.scope.timezone)).date()
+            if selected_date > today:
+                raise DomainError("不能查詢未來日期")
+            entries, has_next = await self.accounting.recent_entries(
+                context,
+                transaction_date=selected_date,
+            )
+            return [
+                recent_entries_message(
+                    entries,
+                    is_group=context.scope.scope_type is not ScopeType.PERSONAL,
+                    page=0,
+                    has_next=has_next,
+                    selected_date=selected_date,
+                )
+            ]
         if action == "entry.summary":
             today = datetime.now(ZoneInfo(context.scope.timezone)).date()
             year = int(value("year", str(today.year)))
