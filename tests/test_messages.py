@@ -29,6 +29,7 @@ from line_assistant.line.messages import (
     settings_menu_message,
     settings_payment_list_message,
     settings_payment_message,
+    setup_introduction_message,
     setup_review_message,
     setup_template_message,
     summary_message,
@@ -39,8 +40,10 @@ from line_assistant.line.messages import (
 def test_generated_messages_match_line_sdk_schema() -> None:
     menu = main_menu_message(is_group=False)
     amount = amount_prompt_message()
+    introduction = setup_introduction_message(include_payments=True)
     FlexMessage.from_dict(menu)
     TextMessage.from_dict(amount)
+    TextMessage.from_dict(introduction)
 
 
 def test_setup_review_message_schema() -> None:

@@ -38,6 +38,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "line_assistant" = ["py.typed"]
 "line_assistant.seeds" = ["*.yaml"]
+"line_assistant.templates" = ["*.txt"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

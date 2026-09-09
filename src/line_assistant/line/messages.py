@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from functools import cache
+from importlib.resources import files
 from typing import Any
 from urllib.parse import urlencode
 
@@ -19,6 +21,24 @@ from line_assistant.ledger.setup import SetupService
 
 BotMessage = dict[str, Any]
 FlexAction = dict[str, Any]
+
+
+@cache
+def load_setup_template(filename: str) -> str:
+    return files("line_assistant").joinpath("templates", filename).read_text(encoding="utf-8")
+
+
+@cache
+def load_setup_sections(filename: str) -> dict[str, list[str]]:
+    sections: dict[str, list[str]] = {}
+    current_section: str | None = None
+    for line in load_setup_template(filename).splitlines():
+        if line.startswith("• "):
+            current_section = line.removeprefix("• ")
+            sections[current_section] = []
+        elif current_section is not None and line.startswith("  ◦ "):
+            sections[current_section].append(line.removeprefix("  ◦ "))
+    return sections
 
 
 def short_button_label(value: str, *, maximum: int = 40) -> str:
@@ -96,6 +116,7 @@ def flex_card(
     lines: list[str],
     actions: list[FlexAction] | None = None,
     color: str = "#2563EB",
+    hero_image_url: str | None = None,
 ) -> BotMessage:
     body_contents: list[dict[str, Any]] = [
         {
@@ -122,6 +143,14 @@ def flex_card(
         "type": "bubble",
         "body": {"type": "box", "layout": "vertical", "contents": body_contents},
     }
+    if hero_image_url:
+        bubble["hero"] = {
+            "type": "image",
+            "url": hero_image_url,
+            "size": "full",
+            "aspectRatio": "20:13",
+            "aspectMode": "cover",
+        }
     if actions:
         bubble["footer"] = {
             "type": "box",
@@ -156,154 +185,51 @@ def welcome_message() -> BotMessage:
         lines=[
             "我是您的小幫手－科米蛙。",
             "可以幫您解決各種疑難雜症。",
-            "目前提供的服務：",
-            "1. 記帳中心",
+            "目前提供的服務有：",
+            "  1. 記帳中心",
             "請選擇您有興趣的服務，讓科米蛙協助完成初始化設定。",
         ],
         actions=[postback_button("記帳中心", "service.ledger", style="primary")],
         color="#16A34A",
+        hero_image_url=(
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQub2d-8RmsEoaYJJpEzVNAK4LjkRkfs"
+            "YX1rpnDUo8SiLI81fS_9QLcI5c&s=10"
+        ),
     )
 
 
 def setup_introduction_message(*, include_payments: bool) -> BotMessage:
-    payment_text = (
-        "另外，也請設定付款方式底下的付款工具：現金、信用卡。\n\n"
-        if include_payments
-        else ""
-    )
+    categories = load_setup_sections("setup_categories.txt")
+    expense_text = "\n".join(f"• {name}" for name in categories["支出"])
+    income_text = "\n".join(f"• {name}" for name in categories["收入"])
+    payment_text = ""
+    if include_payments:
+        payment_names = load_setup_sections("setup_payment_methods.txt")
+        payment_lines = "\n".join(f"• {name}" for name in payment_names)
+        payment_text = (
+            "💳 另外，科米蛙也需要幫您在記帳中心設定專屬的付款工具。"
+            "請依照您日常習慣，填入適當的付款子項目\n"
+            f"{payment_lines}\n\n"
+        )
     return text_message(
-        "首先，科米蛙需要幫您在記帳中心設定專屬的記帳項目。\n\n"
+        "==== 記帳中心初始化設定 ====\n\n"
+        "📝 首先，科米蛙需要幫您在記帳中心設定專屬的記帳項目。"
+        "請依照日常收支，填入適當的記帳子分類。\n\n"
         "「支出」的記帳分類包含：\n"
-        "• 食　• 衣　• 住　• 行　• 育\n"
-        "• 樂　• 醫療　• 理財　• 其他\n\n"
+        f"{expense_text}\n\n"
         "「收入」的記帳分類包含：\n"
-        "• 一般收入　• 投資收入　• 其他\n\n"
-        "請依照日常收支，填入適當的記帳子分類。\n"
+        f"{income_text}\n\n"
         f"{payment_text}"
-        "科米蛙會提供可複製修改的範本，直接完整回傳即可。\n"
-        "注意：記帳分類的第一、二層，以及付款方式皆為固定項目。"
+        "🔎 科米蛙會提供可複製修改的範本，直接完整回傳即可。\n"
+        "⚠️ 注意：上述的母分類是固定不可變動的，但您可以在其底下填入自己的子分類。"
     )
 
 
 def setup_template_message(*, include_payments: bool) -> BotMessage:
-    payment_template = (
-        "\n\n• 現金\n"
-        "  ◦ 實體\n"
-        "  ◦ 轉帳\n"
-        "  ◦ 約當\n\n"
-        "• 信用卡\n"
-        "  ◦ 永豐DAWHO卡\n"
-        "  ◦ 台新Richart卡\n"
-        "  ◦ 國泰Cube卡\n"
-        "  ◦ 富邦J卡\n"
-        "  ◦ 玉山Unicard"
-        if include_payments
-        else ""
-    )
-    return text_message(
-        "請複製下方範本後，依需求增刪「▪」開頭的記帳子分類，\n"
-        "或增刪現金、信用卡下以「◦」開頭的付款工具，再一次完整回傳。\n"
-        "請保留收入／支出下的「•」與「◦」，以及付款方式的「•」固定項目。\n\n"
-        "• 收入\n"
-        "  ◦ 一般收入\n"
-        "    ▪ 薪資\n"
-        "    ▪ 上半年績效\n"
-        "    ▪ 下半年績效\n"
-        "    ▪ 年終獎金\n"
-        "    ▪ Q1 季獎金\n"
-        "    ▪ Q2 季獎金\n"
-        "    ▪ Q3 季獎金\n"
-        "    ▪ Q4 季獎金\n"
-        "    ▪ 勞動節\n"
-        "    ▪ 端午節\n"
-        "    ▪ 中秋節\n"
-        "    ▪ 生日\n"
-        "    ▪ 開工\n"
-        "    ▪ 尾牙\n"
-        "    ▪ 旅遊補助\n"
-        "    ▪ 差旅補助\n"
-        "    ▪ 中獎禮券\n"
-        "  ◦ 投資收入\n"
-        "    ▪ 銀行利息\n"
-        "    ▪ 股利所得\n"
-        "    ▪ 股票買賣\n"
-        "  ◦ 其他\n\n"
-        "• 支出\n"
-        "  ◦ 食\n"
-        "    ▪ 早餐\n"
-        "    ▪ 早午餐\n"
-        "    ▪ 午餐\n"
-        "    ▪ 下午茶\n"
-        "    ▪ 晚餐\n"
-        "    ▪ 宵夜\n"
-        "    ▪ 節日餐\n"
-        "    ▪ 點心零嘴\n"
-        "    ▪ 食材\n"
-        "  ◦ 衣\n"
-        "    ▪ 服裝\n"
-        "    ▪ 鞋子\n"
-        "    ▪ 配件\n"
-        "    ▪ 剪髮理容\n"
-        "  ◦ 住\n"
-        "    ▪ 房租\n"
-        "    ▪ 電費\n"
-        "    ▪ 水費\n"
-        "    ▪ 網路費\n"
-        "    ▪ 電話費\n"
-        "    ▪ 綜所稅\n"
-        "    ▪ 家電傢俱用品\n"
-        "    ▪ 生活必需用品\n"
-        "    ▪ 串流訂閱\n"
-        "    ▪ 雜支\n"
-        "  ◦ 行\n"
-        "    ▪ 油錢\n"
-        "    ▪ 捷運\n"
-        "    ▪ 公車\n"
-        "    ▪ 客運\n"
-        "    ▪ 台鐵\n"
-        "    ▪ 區間\n"
-        "    ▪ 高鐵\n"
-        "    ▪ 飛機\n"
-        "    ▪ 停車費\n"
-        "    ▪ 過路費\n"
-        "    ▪ 租車\n"
-        "    ▪ 計程車\n"
-        "    ▪ 維修保養\n"
-        "    ▪ 美容洗車\n"
-        "    ▪ 牌照稅\n"
-        "    ▪ 燃料費\n"
-        "    ▪ 汽機車保險\n"
-        "    ▪ 驗車費\n"
-        "    ▪ 材料費\n"
-        "    ▪ 罰單\n"
-        "  ◦ 育\n"
-        "    ▪ 書籍\n"
-        "    ▪ 課程\n"
-        "    ▪ AI 訂閱\n"
-        "    ▪ 考試\n"
-        "  ◦ 樂\n"
-        "    ▪ 旅行住宿\n"
-        "    ▪ 旅行遊玩\n"
-        "    ▪ 旅行購物\n"
-        "    ▪ 旅行吃飯\n"
-        "    ▪ 旅行保險\n"
-        "    ▪ 旅行雜支\n"
-        "    ▪ 運動健身\n"
-        "    ▪ 社交\n"
-        "    ▪ 生活奢侈用品\n"
-        "    ▪ 送禮物\n"
-        "    ▪ 婚喪喜慶\n"
-        "  ◦ 醫療\n"
-        "    ▪ 診所就醫\n"
-        "    ▪ 購買藥物\n"
-        "    ▪ 保費\n"
-        "  ◦ 理財\n"
-        "    ▪ 儲蓄\n"
-        "    ▪ ETF 股票\n"
-        "    ▪ 個股股票\n"
-        "  ◦ 其他"
-        f"{payment_template}"
-    )
+    template = load_setup_template("setup_categories.txt").rstrip()
+    if include_payments:
+        template = f"{template}\n\n{load_setup_template('setup_payment_methods.txt').rstrip()}"
+    return text_message(template)
 
 
 def setup_review_message(conversation: ConversationSession) -> BotMessage:
